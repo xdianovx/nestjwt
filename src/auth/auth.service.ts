@@ -1,26 +1,61 @@
-import { Injectable } from '@nestjs/common';
-import { CreateAuthDto } from './dto/create-auth.dto';
-import { UpdateAuthDto } from './dto/update-auth.dto';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+} from '@nestjs/common';
+import { UserService } from 'src/user/user.service';
+import * as bcrypt from 'bcrypt';
+import { CreateUserDto } from '../user/dto/create-user.dto';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class AuthService {
-  create(createAuthDto: CreateAuthDto) {
-    return 'This action adds a new auth';
+  constructor(
+    private userService: UserService,
+    private jwtService: JwtService,
+  ) {}
+  async login(dto) {
+    let user = await this.userService.getUserByEmail(dto.email);
+    const isPassword = await bcrypt.compare(dto.password, user[0].password);
+
+    if (!user[0]) {
+      throw new BadRequestException('Неверный логин или пароль');
+    }
+
+    if (!isPassword) {
+      throw new BadRequestException('Неверный логин или пароль');
+    }
+
+    const token = await this.jwtService.sign({
+      id: user[0].id,
+      email: user[0].email,
+    });
+
+    const res = [user[0], token];
+    return token;
   }
 
-  findAll() {
-    return `This action returns all auth`;
+  async register(dto: CreateUserDto) {
+    const [...candidate] = await this.userService.getUserByEmail(dto.email);
+    if (candidate[0]?.email) {
+      throw new HttpException(
+        'Данный email уже зарегестрирован в системе',
+        HttpStatus.BAD_REQUEST,
+      );
+    } else {
+      const hashPassword = await bcrypt.hash(dto.password, 5);
+      const user = this.userService.create({ ...dto, password: hashPassword });
+      return user;
+    }
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} auth`;
-  }
-
-  update(id: number, updateAuthDto: UpdateAuthDto) {
-    return `This action updates a #${id} auth`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} auth`;
+  async validateUser(email: string, password: string) {
+    const user = await this.userService.findUser(email);
+    if (user && user[0].password === password) {
+      const { password, ...userData } = user[0];
+      return userData;
+    }
+    return null;
   }
 }

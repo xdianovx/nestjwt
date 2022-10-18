@@ -1,62 +1,63 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
+import { RolesService } from '../roles/roles.service';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class UserService {
-  private users: User[] = [
-    {
-      id: 0,
-      name: 'Bob',
-      email: 'bob@gmail.com',
-      password: 'bobPass',
-    },
+  constructor(
+    @InjectRepository(User) private readonly user: Repository<User>,
+    private roleService: RolesService,
+    private readonly jwtService: JwtService,
+  ) {}
 
-    {
-      id: 1,
-      name: 'John',
-      email: 'john@gmail.com',
-      password: 'johnPass',
-    },
+  async create(dto: CreateUserDto) {
+    try {
+      const user = await this.user.create(dto);
+      const defaultRole = await this.roleService.getRoleByValue('USER');
+      user.roles = defaultRole;
+      this.user.save(user);
 
-    {
-      id: 2,
-      name: 'Gary',
-      email: 'gary@gmail.com',
-      password: 'garyPass',
-    },
-  ];
-
-  findByEmail(email: string): Promise<User | undefined> {
-    const user = this.users.find((user) => user.email === email);
-    if (user) {
-      return Promise.resolve(user);
+      return user;
+    } catch (error) {
+      return error;
     }
-    return undefined;
   }
 
-  findOne(id: number): Promise<User | undefined> {
-    const user = this.users.find((user) => user.id === id);
-    if (user) {
-      return Promise.resolve(user);
+  async findUser(email: string) {
+    const user = await this.user.find({
+      where: { email: email },
+      relations: {
+        roles: true,
+      },
+    });
+
+    return user;
+  }
+
+  async getUserByEmail(email: string) {
+    const user = await this.user.find({
+      where: { email: email },
+      relations: {
+        roles: true,
+      },
+    });
+    return user;
+  }
+
+  async findAll() {
+    try {
+      const users = await this.user.find({
+        relations: {
+          roles: true,
+        },
+      });
+      return users;
+    } catch (error) {
+      return error;
     }
-    return undefined;
-  }
-
-  create(createUserDto: CreateUserDto) {
-    return 'This action adds a new user';
-  }
-
-  findAll() {
-    return `This action returns all user`;
-  }
-
-  update(id: number, updateUserDto: UpdateUserDto) {
-    return `This action updates a #${id} user`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} user`;
   }
 }
